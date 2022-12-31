@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(ArenaAllocatorTest C)
+project(memory_allocators_tests C)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     # Adding DEBUG macro
@@ -15,6 +15,6 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 
 target_link_libraries(${PROJECT_NAME}
         PRIVATE
-        ArenaAllocator)
+        memory_allocators)
 
 add_test(ArenaAllocatorTests ${PROJECT_NAME})

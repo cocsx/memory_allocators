@@ -1,8 +1,10 @@
 .idea
 .vscode
+
+build
 cmake-build-*
 
 .gdb_history
-
+.ccls-cache
 .cache
 compile_commands.json

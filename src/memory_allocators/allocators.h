@@ -4,7 +4,8 @@
 #define ALLOCATORS_H
 
 #include <stdbool.h>
-#include <stddef.h>
+#include <stdlib.h>
+
 
 typedef struct {
     void*  __buffer;
@@ -19,8 +20,20 @@ void  linear_release(linear_s* a);
 
 typedef struct {
     void*  __buffer;
-    size_t __buff_size;
+    size_t __buff_size; 
     size_t __offset;
+    bool   __heap;
+} stack_s;
+
+void  stack_init(stack_s* a, size_t size);
+void* stack_alloc(stack_s* a, uint size);
+void  stack_free(stack_s* a);
+void  stack_release(stack_s* a);
+
+
+typedef struct {
+    void*  __buffer;
+    size_t __buff_size;
     bool   __heap;
 
     // Differences
@@ -41,13 +54,13 @@ void  pool_release(pool_s* a);
 #ifdef ALLOCATORS_IMPLEMENTATION
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdint.h>
 #include <assert.h>
 #include <string.h>
 
-#define NOT_IMPLEMENTED(func_name) do { \
-    assert(false && "[FATAL]:" #func_name "not implemented!"); \
+
+#define NOT_IMPLEMENTED(func_name) do {                         \
+    assert(false && "[FATAL]:" #func_name "not implemented!");  \
 } while(0)
 
 #define FUNC_API inline
@@ -77,7 +90,7 @@ FUNC_API static uintptr_t __align(uintptr_t ptr, size_t align)
 }
 
 FUNC_API static void __create_free_list(pool_s* a)
-{
+{ // FIXME: Remove warnings
     size_t num_of_chunks = a->__buff_size / a->__chunk_size;
     for (size_t i = 0; i < num_of_chunks; ++i)
     {
@@ -93,7 +106,6 @@ FUNC_API static void __create_free_list(pool_s* a)
     a->__free_list_head = a->__buffer;
 }
 
-///////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////
 /// Linear allocator
@@ -133,21 +145,68 @@ FUNC_API void linear_release(linear_s* a)
     a->__offset = 0;
 }
 
+
 ///////////////////////////////////////////////////////
+/// Stack allocator
+
+FUNC_API void stack_init(stack_s* a, size_t size)
+{
+    a->__buff_size = __check_size(size);
+    a->__buffer    = malloc(a->__buff_size);
+    a->__offset    = 0;
+    a->__heap      = true;
+}
+
+FUNC_API void* stack_alloc(stack_s* a, uint size)
+{ // FIXME: Add padding
+    if (a->__offset + size + sizeof(uint) > a->__buff_size)
+    {
+        printf("[ERROR]: Not enough space, can't allocate!");
+        return NULL;
+    }
+    
+    void* header_ptr = &a->__buffer[a->__offset + size];
+    memcpy(header_ptr, &size, sizeof(uint));
+
+    void* ptr = &a->__buffer[a->__offset];
+    a->__offset = a->__offset + size + sizeof(uint);
+
+    return ptr;
+}
+
+FUNC_API void stack_free(stack_s* a)
+{
+    uint block_size;
+    void* ptr = &a->__buffer[a->__offset - sizeof(uint)];
+    memcpy(&block_size, ptr, sizeof(uint));
+
+    a->__offset -= block_size + sizeof(uint);
+}
+
+FUNC_API void stack_release(stack_s* a)
+{
+    if (a->__heap)
+    {
+        free(a->__buffer);
+        a->__buffer = NULL;
+        a->__buff_size = 0;
+    }
+    a->__offset = 0;
+}
+
 
 ///////////////////////////////////////////////////////
 /// Pool allocator
 
 FUNC_API void pool_init(pool_s* a, size_t size, size_t chunk_size)
-{
+{ // TODO: Change asserts
     assert(chunk_size >= sizeof(uintptr_t) && "[FATAL]: The size of the chunk MUST be larger than `sizeof(uintptr_t)`!");
     assert(size > chunk_size && "[FATAL]: The buffer `size` must be bigger than the `chunk_size`!");
     assert(size % chunk_size == 0 && "[FATAL]: The value `size` must be a multiple of `chunk_size`!");
 
-    a->__buff_size  = size;
+    a->__buff_size  = __check_size(size);
     a->__buffer     = malloc(a->__buff_size);
     a->__chunk_size = chunk_size;
-    a->__offset     = 0;
     a->__heap     = true;
     __create_free_list(a);
 }
@@ -184,7 +243,6 @@ FUNC_API void pool_free(pool_s* a, void* ptr)
     a->__free_list_head = ptr;
 }
 
-
 FUNC_API void pool_release(pool_s* a)
 {
     if (a->__heap)
@@ -193,12 +251,10 @@ FUNC_API void pool_release(pool_s* a)
         a->__buffer = NULL;
         a->__buff_size = 0;
     }
-    a->__offset         = 0;
     a->__chunk_size     = 0;
     a->__free_list_head = NULL;
 }
 
-///////////////////////////////////////////////////////
 
 #endif /* ALLOCATORS_IMPLEMENTATION */
 
