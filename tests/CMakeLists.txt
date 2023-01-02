@@ -9,6 +9,9 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0")
 endif()
 
+set(CMAKE_C_STANDARD 11)
+
+add_compile_options(-Wall -Wextra -pedantic -Werror)
 
 file(GLOB_RECURSE SOURCES "*.c")
 add_executable(${PROJECT_NAME} ${SOURCES})

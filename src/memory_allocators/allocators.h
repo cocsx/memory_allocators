@@ -63,12 +63,12 @@ void  pool_release(pool_s* a);
     assert(false && "[FATAL]:" #func_name "not implemented!");  \
 } while(0)
 
-#define FUNC_API inline
+#define FUNC_API extern
 
 ///////////////////////////////////////////////////////
 /// Helper functions
 
-FUNC_API static size_t __check_size(size_t sz)
+static size_t __check_size(size_t sz)
 {
     if (sz != 0 && !(sz & (sz - 1)))
         return sz;
@@ -79,7 +79,7 @@ FUNC_API static size_t __check_size(size_t sz)
     return out_size;
 }
 
-FUNC_API static uintptr_t __align(uintptr_t ptr, size_t align)
+static uintptr_t __align(uintptr_t ptr, size_t align)
 {
     uintptr_t aligned_ptr = ptr;
     size_t mod = (size_t) aligned_ptr & (align - 1);
@@ -89,19 +89,20 @@ FUNC_API static uintptr_t __align(uintptr_t ptr, size_t align)
     return aligned_ptr;
 }
 
-FUNC_API static void __create_free_list(pool_s* a)
-{ // FIXME: Remove warnings
+static void __create_free_list(pool_s* a)
+{
     size_t num_of_chunks = a->__buff_size / a->__chunk_size;
     for (size_t i = 0; i < num_of_chunks; ++i)
     {
         size_t chunk_offset = i * a->__chunk_size;
         size_t next_chunk_offset = ( i + 1 ) * a->__chunk_size;
-        uintptr_t next_chunk_ptr = (uintptr_t) &a->__buffer[next_chunk_offset];
-        if (next_chunk_ptr >= (uintptr_t) a->__buffer + a->__chunk_size * num_of_chunks)
+        void* next_chunk_ptr = (void*)((size_t) a->__buffer + next_chunk_offset);
+        if (next_chunk_ptr >= (void*)((size_t) a->__buffer + a->__chunk_size * num_of_chunks))
         {
-            next_chunk_ptr = (uintptr_t) NULL;
+            next_chunk_ptr = NULL;
         }
-        memcpy(&a->__buffer[chunk_offset], &next_chunk_ptr, sizeof(uintptr_t));
+        void* chunk_ptr =  (void*)((size_t) a->__buffer + chunk_offset);
+        memcpy(chunk_ptr, &next_chunk_ptr, sizeof(uintptr_t));
     }
     a->__free_list_head = a->__buffer;
 }
@@ -120,7 +121,7 @@ FUNC_API void linear_init(linear_s* a, size_t size)
 
 FUNC_API void* linear_alloc(linear_s* a, size_t size)
 {
-    uintptr_t curr_ptr  = (uintptr_t) &a->__buffer[a->__offset];
+    uintptr_t curr_ptr  = (size_t) a->__buffer + a->__offset;
     size_t pad_offset   = __align(curr_ptr, DEFAULT_ALIGN) - (size_t) a->__buffer;
 
     if (pad_offset + size > a->__buff_size)
@@ -129,9 +130,9 @@ FUNC_API void* linear_alloc(linear_s* a, size_t size)
         return NULL;
     }
 
-    void* ptr = &a->__buffer[pad_offset];
+    uintptr_t ptr = (size_t) a->__buffer + pad_offset;
     a->__offset = pad_offset + size;
-    return ptr;
+    return (void*)ptr;
 }
 
 FUNC_API void linear_release(linear_s* a)
@@ -158,17 +159,17 @@ FUNC_API void stack_init(stack_s* a, size_t size)
 }
 
 FUNC_API void* stack_alloc(stack_s* a, uint size)
-{ // FIXME: Add padding
+{ // NOTE: Add alignment
     if (a->__offset + size + sizeof(uint) > a->__buff_size)
     {
         printf("[ERROR]: Not enough space, can't allocate!");
         return NULL;
     }
     
-    void* header_ptr = &a->__buffer[a->__offset + size];
+    void* header_ptr = (void*) ( (size_t) a->__buffer + a->__offset + size);
     memcpy(header_ptr, &size, sizeof(uint));
 
-    void* ptr = &a->__buffer[a->__offset];
+    void* ptr = (void*) ( (size_t) a->__buffer + a->__offset);
     a->__offset = a->__offset + size + sizeof(uint);
 
     return ptr;
@@ -177,7 +178,7 @@ FUNC_API void* stack_alloc(stack_s* a, uint size)
 FUNC_API void stack_free(stack_s* a)
 {
     uint block_size;
-    void* ptr = &a->__buffer[a->__offset - sizeof(uint)];
+    void* ptr = (void*) ((size_t) a->__buffer + a->__offset - sizeof(uint));
     memcpy(&block_size, ptr, sizeof(uint));
 
     a->__offset -= block_size + sizeof(uint);
@@ -199,7 +200,7 @@ FUNC_API void stack_release(stack_s* a)
 /// Pool allocator
 
 FUNC_API void pool_init(pool_s* a, size_t size, size_t chunk_size)
-{ // TODO: Change asserts
+{ // NOTE: Change asserts with something more robust
     assert(chunk_size >= sizeof(uintptr_t) && "[FATAL]: The size of the chunk MUST be larger than `sizeof(uintptr_t)`!");
     assert(size > chunk_size && "[FATAL]: The buffer `size` must be bigger than the `chunk_size`!");
     assert(size % chunk_size == 0 && "[FATAL]: The value `size` must be a multiple of `chunk_size`!");
@@ -221,9 +222,10 @@ FUNC_API void* pool_alloc(pool_s* a, size_t size)
         printf("[ERROR]: No more chunks available!");
         return NULL;
     }
-
+    
+    void* curr_head = (void*) a->__free_list_head;
     void* next_head; 
-    memcpy(&next_head, &a->__free_list_head[0], sizeof(uintptr_t));
+    memcpy(&next_head, curr_head, sizeof(uintptr_t));
 
     a->__free_list_head = next_head;
 
@@ -234,9 +236,6 @@ FUNC_API void pool_free(pool_s* a, void* ptr)
 {
     assert( (((size_t) ptr - (size_t) a->__buffer)) % a->__chunk_size == 0 && "[FATAL]: To free a chunk you have to pass a valid ptr!");
     void* old_head = a->__free_list_head;
-    
-    // Reset the chunk's memory
-    memset(ptr, 0, a->__chunk_size); // TODO: Check if really necessary
     
     // Change the head of the linked list O(1)
     memcpy(ptr, &old_head, sizeof(uintptr_t));
