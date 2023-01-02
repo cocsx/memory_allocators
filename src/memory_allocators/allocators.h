@@ -126,7 +126,7 @@ FUNC_API void* linear_alloc(linear_s* a, size_t size)
 
     if (pad_offset + size > a->__buff_size)
     {
-        printf("[ERROR]: Not enough space!");
+        //printf("[ERROR]: Not enough space!");
         return NULL;
     }
 

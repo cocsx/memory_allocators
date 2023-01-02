@@ -5,7 +5,5 @@ set(CMAKE_C_STANDARD 11)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # Export compile_commands.json
 
-enable_testing()
-
 add_subdirectory(src)
 add_subdirectory(tests)
