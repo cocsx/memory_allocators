@@ -26,4 +26,4 @@ target_link_libraries(${PROJECT_NAME}
 gtest_discover_tests(${PROJECT_NAME})
 add_custom_command(TARGET ${PROJECT_NAME}
                    POST_BUILD
-                   COMMAND ctest --rerun-failed)
+                   COMMAND ctest --output-on-failure)
